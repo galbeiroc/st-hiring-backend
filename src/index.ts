@@ -13,7 +13,7 @@ import { createGetEventsController } from './controllers/get-events';
 
 import { ISettings } from './entity/settings';
 import { COLLECTION, MONGO_DB_NAME } from './constants/constants';
-import { createGetSettingsController } from './controllers/settings';
+import { createGetSettingsController, createPostSettingsController } from './controllers/settings';
 
 const Knex = knex(dbConfig.development);
 
@@ -36,6 +36,7 @@ app.use('/health', (_req, res) => {
 
 app.use('/events', createGetEventsController({ eventsDAL: eventDAL, ticketsDAL: TicketDAL }));
 app.get('/settings', createGetSettingsController(settingsDAL));
+app.post('/settings', createPostSettingsController(settingsDAL));
 
 app.use('/', (_req, res) => {
   res.json({ message: 'Hello API' });
