@@ -1,47 +1,41 @@
 import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
 import { knex } from 'knex';
-import { MongoClient } from 'mongodb';
 
+import { createApp } from './app';
 import dbConfig from './knexfile';
 import { createEventDAL } from './dal/events.dal';
-import { createTicketDAL } from './dal/tickets.dal';
 import { createSettingsDAL } from './dal/settings.dal';
+import { createTicketDAL } from './dal/tickets.dal';
+import { connectMongoDB } from './database/mongo';
 
-import { createGetEventsController } from './controllers/get-events';
+const PORT = 3000;
 
-import { ISettings } from './entity/settings';
-import { COLLECTION, MONGO_DB_NAME } from './constants/constants';
-import { createGetSettingsController, createPostSettingsController } from './controllers/settings';
+const startServer = async (): Promise<void> => {
+  const database = knex(dbConfig.development);
+  const { client: mongoClient, settingsCollection } = await connectMongoDB();
 
-const Knex = knex(dbConfig.development);
+  const app = createApp({
+    eventsDAL: createEventDAL(database),
+    ticketsDAL: createTicketDAL(database),
+    settingsDAL: createSettingsDAL(settingsCollection),
+  });
 
-const mongoClient = new MongoClient(process.env.MONGO_URI ?? 'mongodb://root:example@localhost:27017');
+  const server = app.listen(PORT, () => {
+    console.log(`Server started on port ${PORT}`);
+  });
 
-const settingsCollection = mongoClient.db(MONGO_DB_NAME).collection<ISettings>(COLLECTION);
+  const shutdown = async (): Promise<void> => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    await Promise.all([mongoClient.close(), database.destroy()]);
+  };
 
-const eventDAL = createEventDAL(Knex);
-const TicketDAL = createTicketDAL(Knex);
-const settingsDAL = createSettingsDAL(settingsCollection);
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+};
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-app.use('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.use('/events', createGetEventsController({ eventsDAL: eventDAL, ticketsDAL: TicketDAL }));
-app.get('/settings', createGetSettingsController(settingsDAL));
-app.post('/settings', createPostSettingsController(settingsDAL));
-
-app.use('/', (_req, res) => {
-  res.json({ message: 'Hello API' });
-});
-
-app.listen(3000, () => {
-  console.log('Server Started');
+startServer().catch((error: unknown) => {
+  console.error('Failed to start server', error);
+  process.exitCode = 1;
 });
