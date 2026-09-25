@@ -21,9 +21,9 @@ export const createPostSettingsController = (settingsDAL: ISettingsDAL) => async
     const { body } = req;
     const settings = await settingsDAL.upserSettings(body);
 
-    return res.status(200).json(settings);
+    return res.status(settings.isCreated ? 201 : 200).json(settings);
   } catch (error) {
     console.error('[postSettingController]', error);
-    return res.status(500).json({ message: 'Failed to get settings' });
+    return res.status(500).json({ message: 'Failed to save settings' });
   }
 };
